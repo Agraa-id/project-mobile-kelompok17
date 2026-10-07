@@ -37,8 +37,21 @@ export default function App() {
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([clearLegacyLocalAccount(), restoreSession(), getRememberedEmail()])
-      .then(([, sessionUser, savedEmail]) => {
+    let startupTimeout;
+    const startupState = Promise.all([restoreSession(), getRememberedEmail()]);
+    const startupDeadline = new Promise((resolve, reject) => {
+      startupTimeout = setTimeout(
+        () => reject(new Error('Pemulihan sesi terlalu lama. Silakan masuk kembali atau coba sebagai tamu.')),
+        10000,
+      );
+    });
+
+    clearLegacyLocalAccount().catch((cleanupError) => {
+      console.warn('Data autentikasi lama tidak dapat dibersihkan.', cleanupError);
+    });
+
+    Promise.race([startupState, startupDeadline])
+      .then(([sessionUser, savedEmail]) => {
         if (!mounted) return;
         setUser(sessionUser);
         if (savedEmail) {
@@ -50,9 +63,13 @@ export default function App() {
         if (mounted) setError(restoreError.message || 'Sesi tidak dapat dipulihkan. Coba masuk kembali.');
       })
       .finally(() => {
+        clearTimeout(startupTimeout);
         if (mounted) setLoading(false);
       });
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+      clearTimeout(startupTimeout);
+    };
   }, []);
 
   async function handleSubmit() {

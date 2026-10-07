@@ -1,7 +1,8 @@
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { fetchVenues } from './venuesApi';
 
 const colors = {
   green: '#14564A',
@@ -23,45 +25,48 @@ const colors = {
   gold: '#C58A2A',
 };
 
-const sports = ['Semua', 'Futsal', 'Badminton', 'Basket'];
-
-const venues = [
-  {
-    id: 'urban-futsal',
-    name: 'Urban Futsal Kemang',
-    sport: 'Futsal',
-    location: 'Kemang, Jakarta Selatan',
-    price: 'Rp180.000',
-    rating: '4.8',
-    surface: 'Vinyl indoor',
-    image: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1000&q=80',
-  },
-  {
-    id: 'cempaka-badminton',
-    name: 'Cempaka Badminton Hall',
-    sport: 'Badminton',
-    location: 'Cilandak, Jakarta Selatan',
-    price: 'Rp75.000',
-    rating: '4.7',
-    surface: 'Karpet sintetis',
-    image: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=1000&q=80',
-  },
-  {
-    id: 'northside-basket',
-    name: 'Northside Basket Court',
-    sport: 'Basket',
-    location: 'Pondok Indah, Jakarta Selatan',
-    price: 'Rp220.000',
-    rating: '4.9',
-    surface: 'Indoor hardwood',
-    image: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1000&q=80',
-  },
-];
-
 export default function HomeScreen({ user, isGuest, onSignIn, onSignOut }) {
   const [activeTab, setActiveTab] = useState('explore');
   const [activeSport, setActiveSport] = useState('Semua');
   const [query, setQuery] = useState('');
+  const [venues, setVenues] = useState([]);
+  const [venuesLoading, setVenuesLoading] = useState(true);
+  const [venuesError, setVenuesError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let isActive = true;
+    let timedOut = false;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 15000);
+
+    fetchVenues(controller.signal)
+      .then((loadedVenues) => {
+        if (isActive) setVenues(loadedVenues);
+      })
+      .catch((loadError) => {
+        if (!isActive) return;
+        setVenues([]);
+        setVenuesError(timedOut
+          ? 'Permintaan API terlalu lama. Periksa koneksi dan coba lagi.'
+          : loadError.message || 'Data lapangan tidak dapat dimuat.');
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        if (isActive) setVenuesLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [reloadKey]);
+
+  const sports = ['Semua', ...new Set(venues.map((venue) => venue.sport))];
   const displayName = isGuest ? 'Pemain' : user.name.split(' ')[0];
   const filteredVenues = venues.filter((venue) => {
     const matchesSport = activeSport === 'Semua' || venue.sport === activeSport;
@@ -153,21 +158,46 @@ export default function HomeScreen({ user, isGuest, onSignIn, onSignOut }) {
           <View style={styles.sectionHeading}>
             <View>
               <Text style={styles.sectionTitle}>Lapangan pilihan</Text>
-              <Text style={styles.sectionCaption}>Katalog contoh untuk Jakarta Selatan</Text>
+              <Text style={styles.sectionCaption}>Data lapangan dari REST API</Text>
             </View>
             <Text style={styles.resultCount}>{filteredVenues.length.toString().padStart(2, '0')}</Text>
           </View>
 
-          {filteredVenues.length > 0 ? filteredVenues.map((venue) => (
+          {venuesLoading ? (
+            <View style={styles.dataState}>
+              <ActivityIndicator color={colors.green} />
+              <Text style={styles.emptyCaption}>Memuat data lapangan dari API...</Text>
+            </View>
+          ) : venuesError ? (
+            <View style={styles.dataState}>
+              <Text style={styles.emptyTitle}>Data lapangan belum tersedia</Text>
+              <Text style={styles.emptyCaption}>{venuesError}</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  setVenuesLoading(true);
+                  setVenuesError('');
+                  setReloadKey((current) => current + 1);
+                }}
+                style={styles.retryButton}
+              >
+                <Text style={styles.retryButtonText}>Coba lagi</Text>
+              </Pressable>
+            </View>
+          ) : filteredVenues.length > 0 ? filteredVenues.map((venue) => (
             <VenueCard key={venue.id} venue={venue} />
           )) : (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Lapangan tidak ditemukan</Text>
-              <Text style={styles.emptyCaption}>Coba kata kunci atau kategori olahraga lain.</Text>
+              <Text style={styles.emptyTitle}>{venues.length ? 'Lapangan tidak ditemukan' : 'Belum ada data lapangan'}</Text>
+              <Text style={styles.emptyCaption}>
+                {venues.length ? 'Coba kata kunci atau kategori olahraga lain.' : 'API belum memiliki data untuk ditampilkan.'}
+              </Text>
             </View>
           )}
 
-          <Text style={styles.demoNotice}>Data venue dan harga pada layar ini masih contoh.</Text>
+          {!venuesLoading && !venuesError && venues.length > 0 && (
+            <Text style={styles.demoNotice}>Katalog diperbarui langsung dari REST API.</Text>
+          )}
         </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={styles.accountContent}>
@@ -386,8 +416,11 @@ const styles = StyleSheet.create({
   venuePrice: { color: colors.deep, fontSize: 12, fontWeight: '900' },
   priceUnit: { color: colors.muted, fontSize: 10 },
   emptyState: { marginHorizontal: 22, paddingVertical: 35, alignItems: 'center', borderWidth: 1, borderColor: colors.line, borderRadius: 5, backgroundColor: colors.white },
+  dataState: { marginHorizontal: 22, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: colors.line, borderRadius: 5, backgroundColor: colors.white },
   emptyTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   emptyCaption: { marginTop: 6, color: colors.muted, fontSize: 11 },
+  retryButton: { minHeight: 40, marginTop: 14, paddingHorizontal: 20, borderRadius: 5, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center' },
+  retryButtonText: { color: colors.white, fontSize: 12, fontWeight: '800' },
   demoNotice: { marginHorizontal: 22, marginTop: 1, color: colors.muted, fontSize: 10, textAlign: 'center' },
   accountContent: { flexGrow: 1, paddingBottom: 25 },
   accountHeader: { minHeight: 72, paddingHorizontal: 22, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.line },
