@@ -5,7 +5,7 @@ const venuesApiUrl = supabaseUrl
   ? `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/venues?select=*`
   : '';
 
-export async function fetchVenues(signal) {
+export async function fetchVenues(signal, accessToken) {
   if (!venuesApiUrl || !supabasePublishableKey) {
     throw new Error('Konfigurasi Supabase belum lengkap. Isi URL dan publishable key di .env.local.');
   }
@@ -17,6 +17,7 @@ export async function fetchVenues(signal) {
       headers: {
         Accept: 'application/json',
         apikey: supabasePublishableKey,
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
       signal,
     });

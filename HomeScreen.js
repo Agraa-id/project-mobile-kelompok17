@@ -25,7 +25,7 @@ const colors = {
   gold: '#C58A2A',
 };
 
-export default function HomeScreen({ user, isGuest, onSignIn, onSignOut }) {
+export default function HomeScreen({ user, accessToken, isGuest, onSignIn, onSignOut }) {
   const [activeTab, setActiveTab] = useState('explore');
   const [activeSport, setActiveSport] = useState('Semua');
   const [query, setQuery] = useState('');
@@ -43,7 +43,7 @@ export default function HomeScreen({ user, isGuest, onSignIn, onSignOut }) {
       controller.abort();
     }, 15000);
 
-    fetchVenues(controller.signal)
+    fetchVenues(controller.signal, accessToken)
       .then((loadedVenues) => {
         if (isActive) setVenues(loadedVenues);
       })
@@ -64,7 +64,7 @@ export default function HomeScreen({ user, isGuest, onSignIn, onSignOut }) {
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [reloadKey]);
+  }, [accessToken, reloadKey]);
 
   const sports = ['Semua', ...new Set(venues.map((venue) => venue.sport))];
   const displayName = isGuest ? 'Pemain' : user.name.split(' ')[0];

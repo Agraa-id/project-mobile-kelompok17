@@ -20,6 +20,7 @@ import {
   restoreSession,
   setRememberedEmail,
 } from './authStorage';
+import { supabase } from './supabaseClient';
 import HomeScreen from './HomeScreen';
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [rememberEmail, setRememberEmail] = useState(false);
   const [user, setUser] = useState(null);
+  const [accessToken, setAccessToken] = useState(null);
   const [isGuest, setIsGuest] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -38,6 +40,9 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
     let startupTimeout;
+    const authSubscription = supabase?.auth.onAuthStateChange((_event, session) => {
+      if (mounted) setAccessToken(session?.access_token || null);
+    }).data.subscription;
     const startupState = Promise.all([restoreSession(), getRememberedEmail()]);
     const startupDeadline = new Promise((resolve, reject) => {
       startupTimeout = setTimeout(
@@ -51,9 +56,10 @@ export default function App() {
     });
 
     Promise.race([startupState, startupDeadline])
-      .then(([sessionUser, savedEmail]) => {
+      .then(([session, savedEmail]) => {
         if (!mounted) return;
-        setUser(sessionUser);
+        setUser(session?.user || null);
+        setAccessToken(session?.accessToken || null);
         if (savedEmail) {
           setEmail(savedEmail);
           setRememberEmail(true);
@@ -69,6 +75,7 @@ export default function App() {
     return () => {
       mounted = false;
       clearTimeout(startupTimeout);
+      authSubscription?.unsubscribe();
     };
   }, []);
 
@@ -91,21 +98,21 @@ export default function App() {
 
     setSubmitting(true);
     try {
-      let signedInUser;
+      let authResult;
       if (mode === 'register') {
-        const result = await registerUser(name.trim(), normalizedEmail, password);
-        if (result.needsEmailConfirmation) {
+        authResult = await registerUser(name.trim(), normalizedEmail, password);
+        if (authResult.needsEmailConfirmation) {
           setNotice('Akun dibuat di Supabase. Periksa email untuk konfirmasi, lalu masuk.');
           setMode('login');
           setPassword('');
           return;
         }
-        signedInUser = result.user;
       } else {
-        signedInUser = await loginUser(normalizedEmail, password);
+        authResult = await loginUser(normalizedEmail, password);
       }
       await setRememberedEmail(rememberEmail ? normalizedEmail : '');
-      setUser(signedInUser);
+      setUser(authResult.user);
+      setAccessToken(authResult.accessToken);
       setPassword('');
     } catch (submissionError) {
       setError(submissionError.message || 'Autentikasi gagal. Silakan coba lagi.');
@@ -126,6 +133,7 @@ export default function App() {
     try {
       await logoutUser();
       setUser(null);
+      setAccessToken(null);
       setPassword('');
       setMode('login');
     } catch {
@@ -139,6 +147,7 @@ export default function App() {
     setError('');
     setNotice('');
     setPassword('');
+    setAccessToken(null);
     setIsGuest(true);
   }
 
@@ -155,6 +164,7 @@ export default function App() {
     return (
       <HomeScreen
         user={user}
+        accessToken={accessToken}
         isGuest={isGuest}
         onSignIn={() => { setIsGuest(false); setMode('login'); }}
         onSignOut={handleLogout}

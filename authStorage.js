@@ -32,6 +32,7 @@ export async function registerUser(name, email, password) {
 
   return {
     user: data.user ? toProfile(data.user) : null,
+    accessToken: data.session?.access_token || null,
     needsEmailConfirmation: !data.session,
   };
 }
@@ -40,7 +41,14 @@ export async function loginUser(email, password) {
   const client = requireSupabase();
   const { data, error } = await client.auth.signInWithPassword({ email, password });
   if (error) throw error;
-  return saveProfile(data.user);
+  if (!data.session?.access_token) {
+    throw new Error('Login berhasil, tetapi token akses tidak diterima dari Supabase.');
+  }
+
+  return {
+    user: await saveProfile(data.user),
+    accessToken: data.session.access_token,
+  };
 }
 
 export async function restoreSession() {
@@ -53,7 +61,10 @@ export async function restoreSession() {
     return null;
   }
 
-  return saveProfile(data.session.user);
+  return {
+    user: await saveProfile(data.session.user),
+    accessToken: data.session.access_token,
+  };
 }
 
 export async function logoutUser() {
