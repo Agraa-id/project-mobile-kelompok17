@@ -5,9 +5,15 @@ const venuesApiUrl = supabaseUrl
   ? `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/venues?select=*`
   : '';
 
+function createApiError(kind, message) {
+  const error = new Error(message);
+  error.kind = kind;
+  return error;
+}
+
 export async function fetchVenues(signal, accessToken) {
   if (!venuesApiUrl || !supabasePublishableKey) {
-    throw new Error('Konfigurasi Supabase belum lengkap. Isi URL dan publishable key di .env.local.');
+    throw createApiError('configuration', 'Konfigurasi Supabase belum lengkap. Isi URL dan publishable key di .env.local.');
   }
 
   let response;
@@ -22,19 +28,33 @@ export async function fetchVenues(signal, accessToken) {
       signal,
     });
   } catch (requestError) {
-    if (requestError.name === 'AbortError') throw requestError;
-    throw new Error(`Tidak dapat terhubung ke API lapangan: ${requestError.message}`);
+    if (requestError?.name === 'AbortError') throw requestError;
+    throw createApiError('network', 'Tidak dapat terhubung ke API lapangan. Periksa koneksi internet dan coba lagi.');
   }
 
   if (!response.ok) {
-    throw new Error(`API lapangan mengembalikan HTTP ${response.status}.`);
+    if (response.status >= 400 && response.status < 500) {
+      const message = response.status === 401 || response.status === 403
+        ? 'Akses ke API lapangan ditolak. Periksa konfigurasi akses Supabase.'
+        : response.status === 404
+          ? 'Data lapangan tidak ditemukan di API.'
+          : response.status === 429
+            ? 'API lapangan sedang menerima terlalu banyak permintaan. Coba beberapa saat lagi.'
+            : `Permintaan data lapangan ditolak (HTTP ${response.status}).`;
+      throw createApiError('client', message);
+    }
+    if (response.status >= 500) {
+      throw createApiError('server', `Server API lapangan sedang bermasalah (HTTP ${response.status}). Coba beberapa saat lagi.`);
+    }
+    throw createApiError('http', `API lapangan mengembalikan HTTP ${response.status}.`);
   }
 
   let payload;
   try {
     payload = await response.json();
-  } catch {
-    throw new Error('Respons API lapangan bukan JSON yang valid.');
+  } catch (parseError) {
+    if (parseError?.name === 'AbortError') throw parseError;
+    throw createApiError('response', 'Respons API lapangan bukan JSON yang valid.');
   }
 
   return mapVenuesFromApi(payload);

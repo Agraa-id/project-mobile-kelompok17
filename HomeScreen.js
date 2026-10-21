@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { useNetworkState } from 'expo-network';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
@@ -11,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { fetchVenues } from './venuesApi';
+import { loadCachedVenues, saveCachedVenues } from './venueCache';
 
 const colors = {
   green: '#14564A',
@@ -30,9 +32,11 @@ export default function HomeScreen({ user, accessToken, isGuest, onSignIn, onSig
   const [activeSport, setActiveSport] = useState('Semua');
   const [query, setQuery] = useState('');
   const [venues, setVenues] = useState([]);
+  const [isCachedData, setIsCachedData] = useState(false);
   const [venuesLoading, setVenuesLoading] = useState(true);
-  const [venuesError, setVenuesError] = useState('');
+  const [venuesError, setVenuesError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const networkState = useNetworkState();
 
   useEffect(() => {
     let isActive = true;
@@ -43,28 +47,73 @@ export default function HomeScreen({ user, accessToken, isGuest, onSignIn, onSig
       controller.abort();
     }, 15000);
 
-    fetchVenues(controller.signal, accessToken)
-      .then((loadedVenues) => {
-        if (isActive) setVenues(loadedVenues);
-      })
-      .catch((loadError) => {
-        if (!isActive) return;
-        setVenues([]);
-        setVenuesError(timedOut
-          ? 'Permintaan API terlalu lama. Periksa koneksi dan coba lagi.'
-          : loadError.message || 'Data lapangan tidak dapat dimuat.');
-      })
-      .finally(() => {
-        clearTimeout(timeout);
-        if (isActive) setVenuesLoading(false);
+    const cachePromise = loadCachedVenues()
+      .then((cachedData) => ({ cachedData }))
+      .catch((cacheError) => {
+        console.warn('Cache lapangan tidak dapat dimuat.', cacheError);
+        return { cachedData: null };
       });
+    const requestPromise = fetchVenues(controller.signal, accessToken).then(
+      (loadedVenues) => ({ loadedVenues }),
+      (requestError) => ({ requestError }),
+    );
+
+    async function loadData() {
+      const { cachedData } = await cachePromise;
+      if (!isActive) return;
+
+      setVenuesLoading(true);
+      setVenuesError(null);
+
+      if (cachedData) {
+        setVenues(cachedData.venues);
+        setIsCachedData(true);
+      }
+
+      const requestResult = await requestPromise;
+      if (!isActive) return;
+
+      if ('requestError' in requestResult) {
+        const { requestError } = requestResult;
+        const isOffline = networkState.isConnected === false
+          || networkState.isInternetReachable === false;
+        const errorKind = timedOut
+          ? 'timeout'
+          : isOffline
+            ? 'offline'
+            : requestError.kind || 'request';
+        const message = timedOut
+          ? 'Permintaan API terlalu lama. Periksa koneksi dan coba lagi.'
+          : isOffline
+            ? 'Koneksi internet terputus. Data tersimpan tetap bisa digunakan.'
+            : requestError.message || 'Data lapangan tidak dapat dimuat.';
+        setVenuesError({ kind: errorKind, message });
+      } else {
+        setVenues(requestResult.loadedVenues);
+        setIsCachedData(false);
+        saveCachedVenues(requestResult.loadedVenues).catch((cacheError) => {
+          console.warn('Cache lapangan tidak dapat disimpan.', cacheError);
+        });
+      }
+    }
+
+    loadData().finally(() => {
+      clearTimeout(timeout);
+      if (isActive) setVenuesLoading(false);
+    });
 
     return () => {
       isActive = false;
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [accessToken, reloadKey]);
+  }, [accessToken, networkState.isConnected, networkState.isInternetReachable, reloadKey]);
+
+  function retryLoadingVenues() {
+    setVenuesLoading(true);
+    setVenuesError(null);
+    setReloadKey((current) => current + 1);
+  }
 
   const sports = ['Semua', ...new Set(venues.map((venue) => venue.sport))];
   const displayName = isGuest ? 'Pemain' : user.name.split(' ')[0];
@@ -163,36 +212,66 @@ export default function HomeScreen({ user, accessToken, isGuest, onSignIn, onSig
             <Text style={styles.resultCount}>{filteredVenues.length.toString().padStart(2, '0')}</Text>
           </View>
 
-          {venuesLoading ? (
+          {venuesLoading && venues.length === 0 ? (
             <View style={styles.dataState}>
               <ActivityIndicator color={colors.green} />
               <Text style={styles.emptyCaption}>Memuat data lapangan dari API...</Text>
             </View>
-          ) : venuesError ? (
+          ) : venuesError && venues.length === 0 ? (
             <View style={styles.dataState}>
               <Text style={styles.emptyTitle}>Data lapangan belum tersedia</Text>
-              <Text style={styles.emptyCaption}>{venuesError}</Text>
+              <Text style={styles.emptyCaption}>{venuesError.message}</Text>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => {
-                  setVenuesLoading(true);
-                  setVenuesError('');
-                  setReloadKey((current) => current + 1);
-                }}
+                accessibilityLabel="Coba muat data lapangan lagi"
+                disabled={venuesLoading}
+                onPress={retryLoadingVenues}
                 style={styles.retryButton}
               >
                 <Text style={styles.retryButtonText}>Coba lagi</Text>
               </Pressable>
             </View>
-          ) : filteredVenues.length > 0 ? filteredVenues.map((venue) => (
-            <VenueCard key={venue.id} venue={venue} />
-          )) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>{venues.length ? 'Lapangan tidak ditemukan' : 'Belum ada data lapangan'}</Text>
-              <Text style={styles.emptyCaption}>
-                {venues.length ? 'Coba kata kunci atau kategori olahraga lain.' : 'API belum memiliki data untuk ditampilkan.'}
-              </Text>
-            </View>
+          ) : (
+            <>
+              {venuesError && (
+                <View style={styles.offlineNotice}>
+                  <View style={styles.offlineCopy}>
+                    <Text style={styles.offlineTitle}>
+                      {venuesError.kind === 'offline' ? 'Mode offline' : 'Data belum diperbarui'}
+                    </Text>
+                    <Text style={styles.emptyCaption}>{venuesError.message}</Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Coba muat data lapangan lagi"
+                    disabled={venuesLoading}
+                    onPress={retryLoadingVenues}
+                    style={styles.retryButton}
+                  >
+                    <Text style={styles.retryButtonText}>Coba lagi</Text>
+                  </Pressable>
+                </View>
+              )}
+              {venuesLoading && venues.length > 0 && (
+                <View style={styles.refreshingState}>
+                  <ActivityIndicator color={colors.green} size="small" />
+                  <Text style={styles.emptyCaption}>Memperbarui data lapangan...</Text>
+                </View>
+              )}
+              {isCachedData && !venuesError && (
+                <Text style={styles.cachedNotice}>Menampilkan data lapangan yang tersimpan di perangkat.</Text>
+              )}
+              {filteredVenues.length > 0 ? filteredVenues.map((venue) => (
+                <VenueCard key={venue.id} venue={venue} />
+              )) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>{venues.length ? 'Lapangan tidak ditemukan' : 'Belum ada data lapangan'}</Text>
+                  <Text style={styles.emptyCaption}>
+                    {venues.length ? 'Coba kata kunci atau kategori olahraga lain.' : 'API belum memiliki data untuk ditampilkan.'}
+                  </Text>
+                </View>
+              )}
+            </>
           )}
 
           {!venuesLoading && !venuesError && venues.length > 0 && (
@@ -417,6 +496,11 @@ const styles = StyleSheet.create({
   priceUnit: { color: colors.muted, fontSize: 10 },
   emptyState: { marginHorizontal: 22, paddingVertical: 35, alignItems: 'center', borderWidth: 1, borderColor: colors.line, borderRadius: 5, backgroundColor: colors.white },
   dataState: { marginHorizontal: 22, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: colors.line, borderRadius: 5, backgroundColor: colors.white },
+  offlineNotice: { marginHorizontal: 22, marginBottom: 14, padding: 14, borderRadius: 5, backgroundColor: '#FFF2E8', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  offlineCopy: { flex: 1 },
+  offlineTitle: { color: colors.deep, fontSize: 12, fontWeight: '900' },
+  refreshingState: { marginHorizontal: 22, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  cachedNotice: { marginHorizontal: 22, marginBottom: 12, color: colors.muted, fontSize: 10, textAlign: 'center' },
   emptyTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   emptyCaption: { marginTop: 6, color: colors.muted, fontSize: 11 },
   retryButton: { minHeight: 40, marginTop: 14, paddingHorizontal: 20, borderRadius: 5, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center' },
