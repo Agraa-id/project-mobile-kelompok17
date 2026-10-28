@@ -28,7 +28,13 @@
     "plugins": [
       "expo-status-bar",
       "expo-secure-store",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Lapangan menggunakan data gerak perangkat untuk menampilkan accelerometer dan mendeteksi guncangan."
+        }
+      ]
     ],
     "extra": {
       "eas": {
