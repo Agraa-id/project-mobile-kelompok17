@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -19,8 +18,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -33,6 +31,12 @@
         "expo-sensors",
         {
           "motionPermission": "Lapangan menggunakan data gerak perangkat untuk menampilkan accelerometer dan mendeteksi guncangan."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Izinkan Lapangan mengakses lokasi saat aplikasi digunakan untuk menampilkan posisi dan area lapangan."
         }
       ]
     ],

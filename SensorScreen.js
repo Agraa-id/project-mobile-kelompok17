@@ -42,7 +42,7 @@ export default function SensorScreen() {
   const lastShakeAt = useRef(0);
 
   useEffect(() => {
-    if (!isActive) return undefined;
+    if (!isActive || Platform.OS === 'web') return undefined;
 
     let mounted = true;
     Accelerometer.setUpdateInterval(UPDATE_INTERVAL_MS);
@@ -79,6 +79,11 @@ export default function SensorScreen() {
   }, [isActive]);
 
   async function toggleSensor() {
+    if (Platform.OS === 'web') {
+      setError('Sensor gerak tidak dapat dijalankan di browser pada build ini. Gunakan aplikasi Android atau iOS.');
+      return;
+    }
+
     if (isActive) {
       setIsActive(false);
       setShakeDetected(false);
@@ -161,13 +166,19 @@ export default function SensorScreen() {
 
         <Pressable
           accessibilityRole="button"
-          accessibilityState={{ disabled: isStarting, selected: isActive }}
-          disabled={isStarting}
+          accessibilityState={{ disabled: isStarting || Platform.OS === 'web', selected: isActive }}
+          disabled={isStarting || Platform.OS === 'web'}
           onPress={toggleSensor}
           style={[styles.actionButton, isActive && styles.actionButtonStop, isStarting && styles.actionButtonDisabled]}
         >
           {isStarting ? <ActivityIndicator color={colors.white} /> : (
-            <Text style={styles.actionButtonText}>{isActive ? 'Hentikan sensor' : 'Mulai sensor'}</Text>
+            <Text style={styles.actionButtonText}>
+              {Platform.OS === 'web'
+                ? 'Sensor tersedia di aplikasi mobile'
+                : isActive
+                  ? 'Hentikan sensor'
+                  : 'Mulai sensor'}
+            </Text>
           )}
         </Pressable>
         {!!error && <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text>}
@@ -215,7 +226,9 @@ export default function SensorScreen() {
       <View style={styles.infoBand}>
         <Text style={styles.infoTitle}>Tentang data ini</Text>
         <Text style={styles.infoText}>
-          Accelerometer membaca percepatan pada sumbu X, Y, dan Z. Nilai mentah dalam g ditampilkan sebagai m/s²; data hanya dibaca saat sensor aktif.
+          {Platform.OS === 'web'
+            ? 'Sensor gerak tidak tersedia pada versi browser ini. Buka aplikasi di perangkat Android atau iOS untuk membaca accelerometer.'
+            : 'Accelerometer membaca percepatan pada sumbu X, Y, dan Z. Nilai mentah dalam g ditampilkan sebagai m/s²; data hanya dibaca saat sensor aktif.'}
         </Text>
       </View>
     </ScrollView>

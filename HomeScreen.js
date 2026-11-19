@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { fetchVenues } from './venuesApi';
 import { loadCachedVenues, saveCachedVenues } from './venueCache';
+import LocationScreen from './LocationScreen';
 import SensorScreen from './SensorScreen.js';
 
 const colors = {
@@ -279,6 +280,8 @@ export default function HomeScreen({ user, accessToken, isGuest, onSignIn, onSig
             <Text style={styles.demoNotice}>Katalog diperbarui langsung dari REST API.</Text>
           )}
         </ScrollView>
+      ) : activeTab === 'location' ? (
+        <LocationScreen />
       ) : activeTab === 'sensor' ? (
         <SensorScreen />
       ) : (
@@ -331,6 +334,7 @@ export default function HomeScreen({ user, accessToken, isGuest, onSignIn, onSig
 
       <View style={styles.bottomTabs}>
         <TabButton label="Jelajah" active={activeTab === 'explore'} onPress={() => setActiveTab('explore')} />
+        <TabButton label="Peta" active={activeTab === 'location'} onPress={() => setActiveTab('location')} />
         <TabButton label="Sensor" active={activeTab === 'sensor'} onPress={() => setActiveTab('sensor')} />
         <TabButton label="Akun" active={activeTab === 'account'} onPress={() => setActiveTab('account')} />
       </View>
@@ -533,7 +537,7 @@ const styles = StyleSheet.create({
   signOutButton: { minHeight: 47, marginHorizontal: 22, marginTop: 15, borderWidth: 1, borderColor: colors.line, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
   signOutText: { color: colors.deep, fontSize: 12, fontWeight: '800' },
   bottomTabs: { minHeight: 59, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.paper, flexDirection: 'row', justifyContent: 'space-around' },
-  tabButton: { minWidth: 100, alignItems: 'center' },
+  tabButton: { flex: 1, minWidth: 0, alignItems: 'center' },
   tabIndicator: { width: 24, height: 2, backgroundColor: 'transparent' },
   tabIndicatorActive: { backgroundColor: colors.coral },
   tabLabel: { marginTop: 8, color: colors.muted, fontSize: 10, fontWeight: '700' },
