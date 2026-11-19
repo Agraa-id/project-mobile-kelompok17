@@ -15,6 +15,7 @@ import { fetchVenues } from './venuesApi';
 import { loadCachedVenues, saveCachedVenues } from './venueCache';
 import LocationScreen from './LocationScreen';
 import SensorScreen from './SensorScreen.js';
+import TaskScreen from './TaskScreen';
 
 const colors = {
   green: '#14564A',
@@ -284,6 +285,8 @@ export default function HomeScreen({ user, accessToken, isGuest, onSignIn, onSig
         <LocationScreen />
       ) : activeTab === 'sensor' ? (
         <SensorScreen />
+      ) : activeTab === 'tasks' ? (
+        <TaskScreen accessToken={accessToken} />
       ) : (
         <ScrollView contentContainerStyle={styles.accountContent}>
           <View style={styles.accountHeader}>
@@ -336,6 +339,7 @@ export default function HomeScreen({ user, accessToken, isGuest, onSignIn, onSig
         <TabButton label="Jelajah" active={activeTab === 'explore'} onPress={() => setActiveTab('explore')} />
         <TabButton label="Peta" active={activeTab === 'location'} onPress={() => setActiveTab('location')} />
         <TabButton label="Sensor" active={activeTab === 'sensor'} onPress={() => setActiveTab('sensor')} />
+        <TabButton label="Jadwal" active={activeTab === 'tasks'} onPress={() => setActiveTab('tasks')} />
         <TabButton label="Akun" active={activeTab === 'account'} onPress={() => setActiveTab('account')} />
       </View>
     </View>
