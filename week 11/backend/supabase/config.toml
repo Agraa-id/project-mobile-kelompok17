@@ -1,0 +1,4 @@
+project_id = "project-sewa-lapangan-week11"
+
+[functions.send-week11-notification]
+verify_jwt = true

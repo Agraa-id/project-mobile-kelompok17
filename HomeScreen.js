@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { useNetworkState } from 'expo-network';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -16,6 +16,8 @@ import { loadCachedVenues, saveCachedVenues } from './venueCache';
 import LocationScreen from './LocationScreen';
 import SensorScreen from './SensorScreen.js';
 import TaskScreen from './TaskScreen';
+import Week11Screen from './week 11/Week11Screen';
+import NotificationResponseHandler from './week 11/NotificationResponseHandler';
 
 const colors = {
   green: '#14564A',
@@ -39,6 +41,7 @@ export default function HomeScreen({ user, accessToken, isGuest, onSignIn, onSig
   const [venuesLoading, setVenuesLoading] = useState(true);
   const [venuesError, setVenuesError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [pendingNotification, setPendingNotification] = useState(null);
   const networkState = useNetworkState();
 
   useEffect(() => {
@@ -118,6 +121,23 @@ export default function HomeScreen({ user, accessToken, isGuest, onSignIn, onSig
     setReloadKey((current) => current + 1);
   }
 
+  const handleNotificationResponse = useCallback((notification) => {
+    setPendingNotification(notification);
+    const destinations = {
+      explore: 'explore',
+      lapangan: 'explore',
+      location: 'location',
+      peta: 'location',
+      tasks: 'tasks',
+      jadwal: 'tasks',
+      account: 'account',
+      akun: 'account',
+      notifications: 'notifications',
+      week11: 'notifications',
+    };
+    setActiveTab(destinations[notification.data?.screen] || 'notifications');
+  }, []);
+
   const sports = ['Semua', ...new Set(venues.map((venue) => venue.sport))];
   const displayName = isGuest ? 'Pemain' : user.name.split(' ')[0];
   const filteredVenues = venues.filter((venue) => {
@@ -129,6 +149,10 @@ export default function HomeScreen({ user, accessToken, isGuest, onSignIn, onSig
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" />
+      <NotificationResponseHandler
+        onReceived={setPendingNotification}
+        onResponse={handleNotificationResponse}
+      />
       {activeTab === 'explore' ? (
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
@@ -287,6 +311,13 @@ export default function HomeScreen({ user, accessToken, isGuest, onSignIn, onSig
         <SensorScreen />
       ) : activeTab === 'tasks' ? (
         <TaskScreen accessToken={accessToken} />
+      ) : activeTab === 'notifications' ? (
+        <Week11Screen
+          user={user}
+          isGuest={isGuest}
+          receivedNotification={pendingNotification}
+          onSignIn={onSignIn}
+        />
       ) : (
         <ScrollView contentContainerStyle={styles.accountContent}>
           <View style={styles.accountHeader}>
@@ -340,6 +371,7 @@ export default function HomeScreen({ user, accessToken, isGuest, onSignIn, onSig
         <TabButton label="Peta" active={activeTab === 'location'} onPress={() => setActiveTab('location')} />
         <TabButton label="Sensor" active={activeTab === 'sensor'} onPress={() => setActiveTab('sensor')} />
         <TabButton label="Jadwal" active={activeTab === 'tasks'} onPress={() => setActiveTab('tasks')} />
+        <TabButton label="Notif" active={activeTab === 'notifications'} onPress={() => setActiveTab('notifications')} />
         <TabButton label="Akun" active={activeTab === 'account'} onPress={() => setActiveTab('account')} />
       </View>
     </View>

@@ -38,6 +38,13 @@
         {
           "locationWhenInUsePermission": "Izinkan Lapangan mengakses lokasi saat aplikasi digunakan untuk menampilkan posisi dan area lapangan."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "default",
+          "color": "#14564A"
+        }
       ]
     ],
     "extra": {
